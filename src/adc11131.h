@@ -219,54 +219,31 @@ namespace ADC11131
             return 0;
         }
 
-        /* not working at moment */
-        uint16_t* read_channels( uint16_t* buffer, size_t size, size_t start=0 )
+        /* read multiple channels
+            will read size channels into the buffer starting at channel start */
+        uint16_t* read_channels( uint16_t* buffer, const size_t size, const size_t start=0 )
         {
-            
-            for( size_t i=0; i<size; ++i )
-            {
-                size_t channel = start+i;
-
-                buffer[i] = read_channel( channel );
-            }
-
-            /*uint16_t info;
-
+            uint16_t info;
             SPI.beginTransaction( settings );
 
-            
-            for( size_t i=0; i!=size; ++i )
+            // prime the data        
+            message.set_channel( start );
+            _read_channel();
+
+            for( size_t i=start; i!=size; ++i )
             {
-                const size_t channel = start+i;
-
-                Serial.printf( "i: %d\n", i );
-                Serial.printf( " channel: %d\n", channel );
-
-                // first iteration, prime the sequence
-                if( i==0 )
-                {
-                    Serial.println(" first");
-                    message.set_channel( channel );
-                    _read_channel();
-                }
+                const uint16_t nextChannel = (i+1)%16;
+                message.set_channel( nextChannel );
 
                 info = _read_channel();
 
-                Serial.printf( " retChan: %d\n", (info&0xF000)>>12 );
-
-                if( (info & 0xF000) >> 12 == channel )
+                if( (info & 0xF000) >> 12 == i )
                     buffer[i] = info & 0x0FFF;
                 else
                     buffer[i] = 0;
+            }       
 
-                // last iteration, might go out of valid channel range but ADCmessage will cap it
-                Serial.printf( "request: %d\n", channel+1 );
-                message.set_channel(channel+1);
-            }
-
-          
-
-            SPI.endTransaction();*/
+            SPI.endTransaction();
 
             return buffer;
         }
