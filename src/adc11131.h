@@ -1,11 +1,11 @@
 #ifndef ADC11131_H
 #define ADC11131_H
 
-#include <SPI.h>
+#include <mySPI.h>
 
 namespace ADC11131
 {
-    uint32_t default_clock = 1000000;
+    uint32_t default_clock = 29000000;
 
     enum ScanControl
     {
@@ -137,6 +137,9 @@ namespace ADC11131
         }
     };
 
+
+
+
     class ADC
     {
     private:
@@ -157,8 +160,7 @@ namespace ADC11131
             SPI.beginTransaction( settings );
             digitalWrite( cs, LOW );
 
-            uint8_t high = SPI.transfer( highByte( uint16_t(reset.message) ) );
-            uint8_t low = SPI.transfer( lowByte( uint16_t(reset.message) ) );
+            SPI.transfer16( reset );
 
             digitalWrite( cs, HIGH );
             delayMicroseconds(5);
@@ -168,7 +170,6 @@ namespace ADC11131
         ADC( uint8_t _cs, SPIClass& _spi=SPI, uint32_t clock=default_clock ) 
             : settings(clock, MSBFIRST, SPI_MODE3), spi(_spi), cs(_cs)
         {
-
         }
 
         void begin()
@@ -184,20 +185,19 @@ namespace ADC11131
         inline uint16_t _read_channel()
         {
             uint16_t info = 0;
-            uint8_t* ptr = (uint8_t*)&info;
 
-            digitalWrite( cs, LOW );
-
-            //*(ptr+1) = SPI.transfer( highByte( uint16_t(message) ) );
-            //*(ptr+0) = SPI.transfer( lowByte( uint16_t(message) ) );
-            uint8_t high = SPI.transfer( highByte( uint16_t(message) ) );
-            uint8_t low = SPI.transfer( lowByte( uint16_t(message) ) );
+            digitalWriteFast( cs, LOW );
+            
+            /*const uint8_t high = SPI.transfer( highByte( uint16_t(message) ) );
+            const uint8_t low = SPI.transfer( lowByte( uint16_t(message) ) );
 
             info |= int16_t(high) << 8;
-            info |= int16_t(low);
+            info |= int16_t(low);*/
+
+            info = SPI.transfer16( message );
             
-            digitalWrite( cs, HIGH );
-            delayMicroseconds(5);
+            digitalWriteFast( cs, HIGH );
+            //delayMicroseconds(5);
 
             return info;
         }
@@ -219,10 +219,46 @@ namespace ADC11131
             return 0;
         }
 
+
+        /* read multiple channels
+            will read size channels into the buffer starting at channel 0 */
+
+        template<size_t size=16>
+        bool read_all( uint16_t* buffer )
+        {
+            bool success = true;
+            const ADCMessage primemessage( size-1, ADC11131::ScanControl::STD_EXT );
+            const ADCMessage message( size-1, ADC11131::ScanControl::NA );  
+    
+            SPI.beginTransaction( settings );
+
+            digitalWriteFast( cs, LOW );
+            SPI.transfer16( primemessage );
+            digitalWriteFast( cs, HIGH );
+
+            for( size_t i=0; i<size; ++i )
+            {
+                digitalWriteFast( cs, LOW );
+                buffer[i] = SPI.transfer16( message );
+                digitalWriteFast( cs, HIGH );
+            }
+
+            SPI.endTransaction();
+
+            for( size_t i=0; i<size; ++i )
+            {
+                if( (buffer[i] & 0xF000) >> 12 != i ) success = false;              
+                buffer[i] &= 0x0FFF;
+            }
+
+            return success;
+        }
+
         /* read multiple channels
             will read size channels into the buffer starting at channel start */
-        uint16_t* read_channels( uint16_t* buffer, const size_t size, const size_t start=0 )
+        bool read_channels( uint16_t* buffer, const size_t size, const size_t start=0 )
         {
+            bool success = true;
             uint16_t info;
             SPI.beginTransaction( settings );
 
@@ -240,12 +276,15 @@ namespace ADC11131
                 if( (info & 0xF000) >> 12 == i )
                     buffer[i] = info & 0x0FFF;
                 else
+                {
+                    success = false;                
                     buffer[i] = 0;
-            }       
+                }
+            }     
 
             SPI.endTransaction();
-
-            return buffer;
+            return success;
+            //return buffer;
         }
     };
 };
