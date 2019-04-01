@@ -1,7 +1,7 @@
 #ifndef ADC11131_H
 #define ADC11131_H
 
-#include <mySPI.h>
+#include <SPI.h>
 
 namespace ADC11131
 {
@@ -188,16 +188,9 @@ namespace ADC11131
 
             digitalWriteFast( cs, LOW );
             
-            /*const uint8_t high = SPI.transfer( highByte( uint16_t(message) ) );
-            const uint8_t low = SPI.transfer( lowByte( uint16_t(message) ) );
-
-            info |= int16_t(high) << 8;
-            info |= int16_t(low);*/
-
             info = SPI.transfer16( message );
             
             digitalWriteFast( cs, HIGH );
-            //delayMicroseconds(5);
 
             return info;
         }
@@ -219,10 +212,8 @@ namespace ADC11131
             return 0;
         }
 
-
         /* read multiple channels
             will read size channels into the buffer starting at channel 0 */
-
         template<size_t size=16>
         bool read_all( uint16_t* buffer )
         {
@@ -252,39 +243,6 @@ namespace ADC11131
             }
 
             return success;
-        }
-
-        /* read multiple channels
-            will read size channels into the buffer starting at channel start */
-        bool read_channels( uint16_t* buffer, const size_t size, const size_t start=0 )
-        {
-            bool success = true;
-            uint16_t info;
-            SPI.beginTransaction( settings );
-
-            // prime the data        
-            message.set_channel( start );
-            _read_channel();
-
-            for( size_t i=start; i!=size; ++i )
-            {
-                const uint16_t nextChannel = (i+1)%16;
-                message.set_channel( nextChannel );
-
-                info = _read_channel();
-
-                if( (info & 0xF000) >> 12 == i )
-                    buffer[i] = info & 0x0FFF;
-                else
-                {
-                    success = false;                
-                    buffer[i] = 0;
-                }
-            }     
-
-            SPI.endTransaction();
-            return success;
-            //return buffer;
         }
     };
 };
