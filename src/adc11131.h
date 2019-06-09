@@ -5,7 +5,7 @@
 
 namespace ADC11131
 {
-    uint32_t default_clock = 29000000;
+    uint32_t default_clock = 29900000;
 
     enum ScanControl
     {
@@ -77,11 +77,9 @@ namespace ADC11131
         }
 
         void set_channel( uint8_t val )
-        {
-            val = min(15,max(val,0));
-            
+        {         
             message &= 0xF87F;
-            message |= uint16_t(val) << 7;            
+            message |= uint16_t(val & 0x0F) << 7;            
         }
 
         void set_reset( Reset val )
@@ -142,8 +140,8 @@ namespace ADC11131
 
     class ADC
     {
-    private:
-        ADCMessage message;
+    public:
+        //ADCMessage message;
         SPISettings settings;
         SPIClass spi;
 
@@ -212,10 +210,46 @@ namespace ADC11131
             return 0;
         }
 
+        template<size_t size=16>
+        bool read_sequence( uint16_t (&buffer)[size], uint8_t (&sequence)[size] )
+        {
+            bool success = true;
+            
+            ADCMessage message( sequence[0], ADC11131::ScanControl::MANUAL );
+            //message.set_channel( sequence[0] );
+            
+            SPI.beginTransaction( settings );
+
+            digitalWriteFast( cs, LOW );
+            SPI.transfer16( message );
+            digitalWriteFast( cs, HIGH );
+
+            for( size_t i=0; i<size-1; ++i )
+            {
+                digitalWriteFast( cs, LOW );
+                message.set_channel( sequence[i+1] );
+                buffer[i] = SPI.transfer16( message );
+                digitalWriteFast( cs, HIGH );
+
+                if( (buffer[i] & 0xF000) >> 12 != sequence[i] )
+                    success = false;
+                else
+                    buffer[i] &= 0x0FFF;                
+            }
+
+            digitalWriteFast( cs, LOW );
+            buffer[size-1] = SPI.transfer16( message );
+            digitalWriteFast( cs, HIGH );
+
+            SPI.endTransaction();
+
+            return success;
+        }
+
         /* read multiple channels
             will read size channels into the buffer starting at channel 0 */
         template<size_t size=16>
-        bool read_all( uint16_t* buffer )
+        bool read_all( uint16_t (&buffer)[size] )
         {
             bool success = true;
             const ADCMessage primemessage( size-1, ADC11131::ScanControl::STD_EXT );
