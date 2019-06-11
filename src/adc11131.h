@@ -141,7 +141,7 @@ namespace ADC11131
     class ADC
     {
     public:
-        //ADCMessage message;
+        ADCMessage message;
         SPISettings settings;
         SPIClass spi;
 
@@ -211,8 +211,10 @@ namespace ADC11131
         }
 
         template<size_t size=16>
-        bool read_sequence( uint16_t (&buffer)[size], uint8_t (&sequence)[size] )
+        bool read_sequence( uint16_t (&buffer)[size], uint8_t (&sequence)[size], bool inplace=false )
         {
+            /* if inplace is set then data points will be placed in "sequence" position in buffer */
+
             bool success = true;
             
             ADCMessage message( sequence[0], ADC11131::ScanControl::MANUAL );
@@ -228,7 +230,7 @@ namespace ADC11131
             {
                 digitalWriteFast( cs, LOW );
                 message.set_channel( sequence[i+1] );
-                buffer[i] = SPI.transfer16( message );
+                buffer[ inplace ? sequence[i] : i ] = SPI.transfer16( message );
                 digitalWriteFast( cs, HIGH );
 
                 if( (buffer[i] & 0xF000) >> 12 != sequence[i] )
@@ -238,7 +240,7 @@ namespace ADC11131
             }
 
             digitalWriteFast( cs, LOW );
-            buffer[size-1] = SPI.transfer16( message );
+            buffer[ inplace ? sequence[size-1] : size-1] = SPI.transfer16( message );
             digitalWriteFast( cs, HIGH );
 
             SPI.endTransaction();
